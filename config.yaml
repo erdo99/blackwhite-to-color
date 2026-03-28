@@ -1,0 +1,67 @@
+# LAB U-Net — otomatik (L→ab) veya ipuculu (4 kanal).
+# 4 kanalla egitilmis eski .pt dosyalari in_channels:1 ile YUKLENMEZ; bu ayarla yeniden egit.
+
+data:
+  train_dir: "./data/train"
+  val_dir: "./data/val"
+  # max_train_samples: aşağıdaki moda göre — sabit modda her epoch aynı ilk N; sıralı blokta epoch başına N. null = tüm train
+  max_train_samples: 20000
+  # false: her epoch aynı ilk N görsel. true: epoch 1 ilk N, epoch 2 sonraki N, ... (alfabetik); sonda başa sarar
+  train_sequential_chunks: false
+  image_size: 256
+  num_workers: 4
+  extensions: [".jpg", ".jpeg", ".png", ".webp", ".bmp"]
+  # false: sadece parlaklik L → renk (kullanici ipucu yok); model.in_channels: 1 olmali
+  # true: egitimde seyrek ipucu simulasyonu; model.in_channels: 4
+  use_hints: false
+
+hints:
+  # Training-time hint simulation (mimics sparse user strokes)
+  min_points: 4
+  max_points: 24
+  min_patch_radius: 1
+  max_patch_radius: 4
+  # Probability of disc-shaped patch vs single pixel
+  patch_prob: 0.65
+
+model:
+  in_channels: 1   # 1 = L only (otomatik); 4 = L + mask + hint_ab (use_hints: true)
+  out_channels: 2
+  base_channels: 64
+  num_down: 5    # 256 -> 128 -> 64 -> 32 -> 16 -> 8
+
+train:
+  batch_size: 8
+  epochs: 100
+  lr_g: 0.0002
+  lr_d: 0.0002
+  beta1: 0.5
+  beta2: 0.999
+  # Solgun renk (L1 regression-to-mean): L1'ü düşür, perceptual'ı yükselt; GAN isteğe bağlı (D'de spectral norm var)
+  lambda_l1: 10.0
+  lambda_perceptual: 30.0
+  lambda_gan: 1.0
+  use_gan: false
+  # ab L1: hedef doygunluğu yüksek piksellerde hatayı ağırlaştırır. 0 = düz L1 (eski davranış)
+  chroma_l1_scale: 2.0
+  perceptual_layers: [3, 8, 15]  # relu1_2, relu2_2, relu3_3 on VGG16 features
+  amp: true
+  # NaN / patlama olursa 1.0–5.0 dene; AMP ile VGG bazen kararsız, perceptual artık FP32 hesaplanıyor
+  grad_clip_norm: 1.0
+  checkpoint_dir: "./checkpoints"
+  log_every: 50
+  save_every: 1
+  seed: 42
+  # TensorBoard: tensorboard --logdir ./runs
+  tensorboard: true
+  tensorboard_dir: "./runs"
+
+infer:
+  device: "cuda"
+  checkpoint: "./checkpoints/best.pt"
+  image_size: 256
+
+ui:
+  server_name: "0.0.0.0"
+  server_port: 7860
+  share: false

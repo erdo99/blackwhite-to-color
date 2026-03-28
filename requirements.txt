@@ -1,0 +1,3 @@
+# Bu ortamda torch / torchvision / numpy / pillow / tqdm zaten kuruluysa yeter:
+PyYAML>=6.0
+gradio>=4.44.0

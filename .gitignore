@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+colab.ipynb
+
+# PyTorch / eğitim çıktıları (büyük dosyalar — GitHub'a atma)
+checkpoints/
+runs/
+*.pt
+*.pth
+
+# Colab'da üretilen yerel config (isteğe bağlı; repo kökündeki config.yaml kalır)
+config_colab.yaml
+
+# Veri setleri (Drive / yerel; repo'ya kopyalama)
+data/train/
+data/val/
+
+# Demo / tek seferlik çıktılar
+demo_out/
+*.colorized.png
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Paketleme
+dist/
+build/
+*.egg-info/
