@@ -2,9 +2,11 @@
 
 ## Nasıl çalışıyor?
 
-1. **Eğitim:** Renkli (RGB) görseller alınır, **LAB** uzayına çevrilir. **L\*** (parlaklık) gri görüntü gibi kullanılır; rastgele nokta/bölge seçilerek **kullanıcı ipucu** taklit edilir (maske + doğru **a\*, b\*** değerleri). **U-Net** bu 4 kanallı girdiden tüm görüntü için **a\*, b\*** tahmin eder. Kayıp: **L1** + **VGG perceptual** (isteğe bağlı **GAN**).
+1. **Eğitim (varsayılan — otomatik):** RGB görseller **LAB**’a çevrilir. Girdi **yalnızca L** (1 kanal); **U-Net** **a\*, b\*** tahmin eder (`model.in_channels: 1`, `data.use_hints: false`). Kayıp: **kroma ağırlıklı L1(ab)** (`chroma_l1_scale`, 0 ise düz L1) + **VGG perceptual**; isteğe bağlı **GAN** (ayırıcıda **spectral norm**).
 
-2. **Çıkarım:** Kullanıcı gri görüntü yükler, üzerine fırça ile renk çizer. Arka plan ile boyalı görüntü karşılaştırılarak **ipucu maskesi** ve **hint renkleri** çıkarılır; model renkli çıktı üretir. İsteğe bağlı **yüksek çözünürlük**: a\*/b\* küçük boyutta tahmin edilip tam boy **L\*** ile birleştirilir.
+2. **Eğitim (ipuculu):** `use_hints: true` ve `in_channels: 4` iken L + maske + ipucu **ab** birleştirilir; eğitimde seyrek ipucu simülasyonu kullanılır.
+
+3. **Çıkarım:** **Otomatik** modda gri/renkli yükleme → L’den renk. **Ipuculu** modda arka plan + fırça; ipucu tensörleri çıkarılır. İsteğe bağlı **tam çözünürlük**: küçük boyutta **ab** tahmini, tam boy **L** ile birleştirme (`refine`).
 
 ---
 
@@ -13,16 +15,17 @@
 | Dosya / klasör | İşi |
 |----------------|-----|
 | `config.yaml` | Veri yolları, model boyutu, eğitim hiperparametreleri, checkpoint yolu |
-| `requirements.txt` | Python paket listesi (`pip` ile kurulacak) |
+| `requirements.txt` / `requirements-full.txt` | Hafif veya tam bağımlılık listesi |
 | `train.py` | Eğitim döngüsü, checkpoint kaydı |
 | `infer.py` | Checkpoint yükleme, tek görüntü renklendirme, `colorize` / `colorize_variants` |
-| `app.py` | Gradio arayüzü (görüntü + fırça, çalıştır) |
+| `app.py` | Gradio: otomatik veya ipuculu mod (`use_hints`) |
 | `src/color_space.py` | RGB ↔ LAB dönüşümü (PyTorch) |
 | `src/hints.py` | Eğitimde rastgele ipucu üretimi; çıkarımda ipucu çıkarma |
-| `src/dataset.py` | Klasörden görüntü okuma, augmentasyon, 4 kanallı tensör |
-| `src/losses.py` | L1 (train içinde), VGG perceptual, hinge GAN kayıpları |
-| `src/models/unet.py` | Hint-guided U-Net (4→2 kanal) |
-| `src/models/discriminator.py` | İsteğe bağlı PatchGAN ayırıcı |
+| `src/dataset.py` | Klasörden görüntü okuma, augmentasyon; 1 veya 4 kanal model girdisi |
+| `src/losses.py` | `chroma_weighted_l1`, VGG perceptual, hinge GAN kayıpları |
+| `src/models/unet.py` | U-Net: 1→2 (otomatik) veya 4→2 (ipuculu) |
+| `src/models/discriminator.py` | İsteğe bağlı PatchGAN (Conv’larda spectral norm) |
+| `colab.ipynb` | Google Colab notu (`.gitignore`’da olabilir; repoya dahil edilmeyebilir) |
 | `src/refine.py` | AB kanallarını tam çözünürlüğe yükseltme + L birleştirme |
 | `src/segment_hints.py` | Etiket haritasından toplu renk ipuçları (isteğe bağlı) |
 | `data/train/`, `data/val/` | Eğitim/doğrulama için RGB görüntü klasörleri |
@@ -31,14 +34,14 @@
 
 ## Kütüphaneler hazır mı?
 
-**Hayır — otomatik kurulmaz.** `requirements.txt` sadece **hangi paketlerin gerekli olduğunu** listeler. Bilgisayarda Python varsa şunu bir kez çalıştırman gerekir:
+**Hayır — otomatik kurulmaz.** Önerilen tam kurulum:
 
 ```powershell
 cd c:\Users\erdem\BlackWhitetoColor
-pip install -r requirements.txt
+pip install -r requirements-full.txt
 ```
 
-Gerekli paketler: `torch`, `torchvision`, `numpy`, `Pillow`, `PyYAML`, `tqdm`, `gradio`.
+Torch zaten kuruluysa yalnızca eksikler için `requirements.txt` yeterli olabilir.
 
 ---
 
@@ -50,7 +53,7 @@ Gerekli paketler: `torch`, `torchvision`, `numpy`, `Pillow`, `PyYAML`, `tqdm`, `
 cd c:\Users\erdem\BlackWhitetoColor
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-full.txt
 ```
 
 ---
@@ -61,11 +64,11 @@ pip install -r requirements.txt
 
 ```powershell
 .\.venv\Scripts\Activate.ps1   # venv kullanıyorsan
-pip install -r requirements.txt
-python -c "from src.models.unet import HintGuidedUNet; import torch; m=HintGuidedUNet(); x=torch.randn(1,4,256,256); print(m(x).shape)"
+pip install -r requirements-full.txt
+python -c "from src.models.unet import HintGuidedUNet; import torch; m=HintGuidedUNet(in_channels=1); x=torch.randn(1,1,256,256); print(m(x).shape)"
 ```
 
-Beklenen çıktı: `torch.Size([1, 2, 256, 256])`
+Beklenen çıktı: `torch.Size([1, 2, 256, 256])` — ipuculu mimari için `in_channels=4` ve `x` boyutu `(1,4,256,256)` dene.
 
 ### 2) LAB dönüşümü
 
@@ -91,7 +94,7 @@ python train.py --config config.yaml
 python app.py
 ```
 
-Tarayıcıda açılan adreste görüntü yükle, ipucu çiz, **Run** de.
+Tarayıcıda: **otomatik** modda görüntü yükle → **Renklendir**; **ipuculu** modda ImageEditor ile ipucu ver.
 
 ### 5) Checkpoint yokken arayüz
 
@@ -103,6 +106,6 @@ Uygulama açılır ama renklendirme için önce eğitim gerekir; aksi halde chec
 
 | Soru | Cevap |
 |------|--------|
-| Kütüphaneler projede “hazır” mı? | Liste `requirements.txt` içinde; `pip install` ile kurulmalı. |
+| Kütüphaneler projede “hazır” mı? | `requirements-full.txt` ile `pip install`; hafif liste `requirements.txt`. |
 | venv şart mı? | Hayır; kullanman iyi pratik. |
 | En hızlı test | Yukarıdaki `HintGuidedUNet` + `torch.randn` tek satırlık komut. |

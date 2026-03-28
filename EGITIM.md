@@ -1,6 +1,6 @@
 # Model eğitimi — adım adım
 
-Bu dosya, **hint-guided renklendirme** modelini (`train.py`) nasıl eğiteceğini özetler.
+Bu dosya, `train.py` ile LAB renklendirme modelini nasıl eğiteceğini özetler. Varsayılan (`config.yaml`): **otomatik** mod — `data.use_hints: false`, `model.in_channels: 1` (yalnızca L → a\*/b\*). İsteğe bağlı: **ipuculu** mod (`use_hints: true`, `in_channels: 4`).
 
 ---
 
@@ -21,7 +21,7 @@ python -c "import torch; print('CUDA:', torch.cuda.is_available())"
 
 ## 2. Eğitim verisini hazırlama
 
-- **Renkli** görseller kullanılır (RGB). Model bunları LAB’a çevirip L + taklit edilen kullanıcı ipuçlarından **a/b** öğrenir.
+- **Renkli** görseller kullanılır (RGB). Model bunları LAB’a çevirir; **otomatik** modda girdi yalnızca **L** (parlaklık), hedef **a\*/b\***. **Ipuculu** modda eğitimde seyrek ipucu simülasyonu da eklenir (`hints` bölümü).
 - Varsayılan klasörler (`config.yaml` içindeki `data` bölümü):
 
 | Klasör | Amaç |
@@ -54,14 +54,18 @@ Yeterli veri: pratikte **yüzlerce / binlerce** görüntü daha iyi sonuç verir
 
 Önemli alanlar:
 
+- **`data.use_hints`** / **`model.in_channels`**: `false` + **1** = otomatik; `true` + **4** = ipuculu (uyumsuz kombinasyon `train.py` reddeder).
 - **`data.train_dir`**, **`data.val_dir`**: Veri yolları.
+- **`data.max_train_samples`**: Tüm train yerine en fazla bu kadar görüntü (alfabetik ilk N). `train_sequential_chunks: true` ise her epoch sıradaki N blok.
 - **`data.image_size`**: Varsayılan **256** (VRAM’e göre 128’e düşürebilirsin).
+- **`data.num_workers`**: Windows’ta takılma olursa **0** dene.
 - **`train.batch_size`**: Varsayılan **8**; GPU belleği yetmezse **4** veya **2** yap.
 - **`train.epochs`**: Varsayılan **100** (erken durdurmak için sayıyı azaltabilirsin).
-- **`train.use_gan`**: Varsayılan **false** (L1 + perceptual). **true** yaparsan GAN da devreye girer; ayar biraz daha hassas olur.
+- **`train.lambda_l1`**, **`lambda_perceptual`**, **`chroma_l1_scale`**: Kayıp dengesi; `chroma_l1_scale: 0` düz L1(ab).
+- **`train.use_gan`**: Varsayılan **false** (L1 + perceptual). **true** ise GAN devreye girer; ayırıcıda **spectral normalization** kullanılır.
 - **`train.checkpoint_dir`**: Varsayılan **`./checkpoints`** — en iyi model **`best.pt`** olarak buraya yazılır.
 
-İlk denemede sadece `train_dir` ve gerekirse `batch_size` / `image_size` ile oynaman yeterli.
+İlk denemede `train_dir` / `val_dir` ve gerekirse `batch_size` / `image_size` ile oynaman yeterli.
 
 ---
 
@@ -82,7 +86,7 @@ python train.py --config benim_ayarlarim.yaml
 
 Eğitim sırasında:
 
-- Konsolda **epoch** ve **L1 / perceptual** benzeri loglar görünür.
+- Konsolda **epoch** ve **L1 (kroma ağırlıklı)** / **perceptual** benzeri loglar görünür.
 - **`checkpoints/best.pt`**: Doğrulama metriğine göre seçilen en iyi üretici (generator) ağırlıkları.
 - **`checkpoints/epoch_N.pt`**: Her `save_every` epoch’ta ek kayıtlar (varsayılan her epoch).
 
@@ -90,8 +94,8 @@ Eğitim sırasında:
 
 ## 5. Eğitim bittikten sonra
 
-- Arayüz: `python app.py` — `config.yaml` içindeki `infer.checkpoint` genelde `./checkpoints/best.pt` olmalı.
-- Komut satırı çıkarım: `python infer.py --image yol\gorsel.jpg` (ipucsuz deneme; asıl kullanım UI ile ipucu vermek).
+- Arayüz: `python app.py` — `infer.checkpoint` genelde `./checkpoints/best.pt`. **Otomatik** modda tek görüntü yüklenir; **ipuculu** modda ImageEditor ile fırça kullanılır.
+- Komut satırı: `python infer.py --image yol\gorsel.jpg` — 1 kanallı checkpoint’te otomatik renklendirme; 4 kanallıda ipucusuz sıfır mask ile de çalışır ama asıl amaç UI ile ipucu.
 
 ---
 
@@ -101,7 +105,7 @@ Eğitim sırasında:
 |--------|-------------|
 | `No images in .../train` | `data/train` içine en az bir uygun formatta görüntü koy. |
 | CUDA out of memory | `config.yaml` → `train.batch_size` küçült veya `data.image_size` düşür. |
-| Çok yavaş | CUDA kurulu ve `torch.cuda.is_available()` True mu kontrol et; CPU ile de çalışır ama uzun sürer. |
+| Çok yavaş | CUDA kurulu ve `torch.cuda.is_available()` True mu kontrol et; CPU ile de çalışır ama uzun sürer. Windows’ta DataLoader takılırsa `num_workers: 0`. |
 | İlk kez perceptual loss | VGG16 ağırlıkları internetten indirilebilir; firewall/proxy engelini kontrol et. |
 
 ---
