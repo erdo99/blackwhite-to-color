@@ -41,3 +41,6 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+# Yerel train klasörünü part_* altına bölme (Drive yüklemesi için); repoda tutulmaz
+scripts/split_train_into_subfolders.py

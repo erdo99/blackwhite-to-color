@@ -55,7 +55,7 @@ Gradio varsayılan: `http://127.0.0.1:7860`
 
 ## Google Colab
 
-Projede `colab.ipynb` (`.gitignore`’da; GitHub’a gitmez) — Colab’a **manuel yükle** veya Drive’dan aç. Drive’a proje + görselleri koyup hücreleri sırayla çalıştır. Üretilen `best.pt` dosyasını indirip yerelde `checkpoints/best.pt` yap.
+`colab.ipynb` (çoğu zaman `.gitignore`’da; dosyayı Colab’a **sen yükle**). Not defteri, her oturumda **`git clone`** ile GitHub’dan `train.py` + `src` indirir; **görseller** ve **`best.pt` çıktısı** Drive’da kalır (Colab kapanınca `/content` silinir). Ayrıntılar not defterinin ilk bölümünde.
 
 ## GitHub’a yükleme
 
