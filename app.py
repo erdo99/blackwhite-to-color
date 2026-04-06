@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import gradio as gr
@@ -21,6 +22,36 @@ def _config() -> dict:
         with open(p, encoding="utf-8") as f:
             return yaml.safe_load(f)
     return {}
+
+
+def _checkpoint_dropdown(default_ckpt: str) -> tuple[list[str], str]:
+    """List `checkpoints/*.pt` for UI; include config default if missing from folder."""
+    cwd = Path.cwd().resolve()
+    ckpt_dir = cwd / "checkpoints"
+    paths: list[str] = []
+    if ckpt_dir.is_dir():
+        for f in sorted(ckpt_dir.glob("*.pt"), key=lambda p: p.name.lower()):
+            paths.append(os.path.relpath(f, cwd))
+
+    pref = Path(default_ckpt)
+    if pref.is_file():
+        try:
+            rel = os.path.relpath(pref.resolve(), cwd)
+        except ValueError:
+            rel = str(pref.resolve())
+        if rel not in paths:
+            paths.insert(0, rel)
+    if not paths:
+        paths = [default_ckpt]
+
+    value = paths[0]
+    if pref.is_file():
+        target = pref.resolve()
+        for p in paths:
+            if Path(p).resolve() == target:
+                value = p
+                break
+    return paths, value
 
 
 def _editor_to_pils(editor_value):
@@ -112,6 +143,7 @@ def build_demo(ckpt: str | None, port: int, host: str, share: bool):
     cfg = _config()
     icfg = cfg.get("infer", {})
     default_ckpt = ckpt or icfg.get("checkpoint", "./checkpoints/best.pt")
+    ckpt_choices, ckpt_value = _checkpoint_dropdown(default_ckpt)
     image_size = int(icfg.get("image_size", cfg.get("data", {}).get("image_size", 256)))
     use_hints = bool(cfg.get("data", {}).get("use_hints", True))
 
@@ -133,7 +165,12 @@ def build_demo(ckpt: str | None, port: int, host: str, share: bool):
                 ),
             )
             with gr.Row():
-                ckpt_in = gr.Textbox(value=default_ckpt, label="Checkpoint (.pt)")
+                ckpt_in = gr.Dropdown(
+                    choices=ckpt_choices,
+                    value=ckpt_value,
+                    label="Model (checkpoint .pt)",
+                    allow_custom_value=True,
+                )
                 diff = gr.Slider(0.02, 0.2, value=0.06, step=0.01, label="İpucu hassasiyeti")
             fullres = gr.Checkbox(value=True, label="Tam çözünürlük (AB yükseltme)")
             run_btn = gr.Button("Renklendir", variant="primary")
@@ -154,7 +191,12 @@ def build_demo(ckpt: str | None, port: int, host: str, share: bool):
             )
             inp = gr.Image(type="pil", label="Görüntü yükle (gri veya renkli)", image_mode="RGB")
             with gr.Row():
-                ckpt_in = gr.Textbox(value=default_ckpt, label="Checkpoint (.pt)")
+                ckpt_in = gr.Dropdown(
+                    choices=ckpt_choices,
+                    value=ckpt_value,
+                    label="Model (checkpoint .pt)",
+                    allow_custom_value=True,
+                )
             fullres = gr.Checkbox(value=True, label="Tam çözünürlük (AB yükseltme)")
             run_btn = gr.Button("Renklendir", variant="primary")
             out_img = gr.Image(type="pil", label="Sonuç")

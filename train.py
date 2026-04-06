@@ -75,6 +75,13 @@ def validate(
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=str, default="config.yaml")
+    ap.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        help="Önceki .pt (best veya epoch_N): G ağırlıkları + epoch/metric yüklenir; "
+        "eğitim bir sonraki epoch'tan train.epochs'a kadar devam eder. Optimizer sıfırdan.",
+    )
     args = ap.parse_args()
     cfg = load_config(args.config)
 
@@ -168,6 +175,24 @@ def main() -> None:
         num_down=mcfg["num_down"],
     ).to(device)
 
+    resume_path = args.resume
+    start_epoch = 0
+    if resume_path:
+        rp = Path(resume_path)
+        if not rp.is_file():
+            raise SystemExit(f"--resume dosyası yok: {rp}")
+        ckpt_resume = torch.load(rp, map_location=device, weights_only=False)
+        if "G" not in ckpt_resume:
+            raise SystemExit(f"Checkpoint'ta 'G' yok: {rp}")
+        G.load_state_dict(ckpt_resume["G"], strict=True)
+        start_epoch = int(ckpt_resume.get("epoch", 0))
+        tqdm.write(f"Resume: {rp}  |  kayıtlı epoch={start_epoch}")
+        if start_epoch >= int(tcfg["epochs"]):
+            raise SystemExit(
+                f"Kayıtlı epoch ({start_epoch}) >= train.epochs ({tcfg['epochs']}). "
+                "config'te train.epochs değerini artır (örn. 100)."
+            )
+
     use_gan = bool(tcfg.get("use_gan", False))
     D: PatchDiscriminator | None = None
     if use_gan:
@@ -194,6 +219,10 @@ def main() -> None:
         tqdm.write(f"TensorBoard log: {tb_dir / 'colorization'}  ->  tensorboard --logdir {tb_dir}")
 
     best_metric = float("inf")
+    if resume_path:
+        best_metric = float(ckpt_resume.get("metric", float("inf")))
+        tqdm.write(f"Resume: best combined metric (önceki) = {best_metric}")
+
     global_step = 0
     lambda_l1 = float(tcfg["lambda_l1"])
     lambda_p = float(tcfg["lambda_perceptual"])
@@ -203,7 +232,7 @@ def main() -> None:
     grad_clip = float(gclip) if gclip is not None and float(gclip) > 0 else None
 
     bs = int(tcfg["batch_size"])
-    for epoch in range(1, tcfg["epochs"] + 1):
+    for epoch in range(start_epoch + 1, tcfg["epochs"] + 1):
         if sequential_chunks:
             n_paths = len(all_train_paths)
             if chunk_cursor >= n_paths:
